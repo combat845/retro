@@ -17,10 +17,6 @@ html {
 body {
     background-image: url('/img/background.jpg');
     background-repeat: repeat;
-
-    align-items: center;
-    display: flex;
-    justify-content: center;
 }
 
 #gamebody {
@@ -487,67 +483,10 @@ body {
 
 .menu-item__info {
     color: white;
+    opacity: .55;
     font-size: 30%;
-    position: absolute;
-    left: 15px;
-}
-
-.text-move {
-    animation: horizontally 4s linear infinite alternate;
-}
-
-@-moz-keyframes horizontally {
-    0% {
-        transform: translateX(0%);
-    }
-    25% {
-        transform: translateX(-20%);
-    }
-    50% {
-        transform: translateX(0%);
-    }
-    75% {
-        transform: translateX(20%);
-    }
-    100% {
-        transform: translateX(0%);
-    }
-}
-
-@-webkit-keyframes horizontally {
-    0% {
-        transform: translateX(0%);
-    }
-    25% {
-        transform: translateX(-20%);
-    }
-    50% {
-        transform: translateX(0%);
-    }
-    75% {
-        transform: translateX(20%);
-    }
-    100% {
-        transform: translateX(0%);
-    }
-}
-
-@keyframes horizontally {
-    0% {
-        transform: translateX(0%);
-    }
-    25% {
-        transform: translateX(-20%);
-    }
-    50% {
-        transform: translateX(0%);
-    }
-    75% {
-        transform: translateX(20%);
-    }
-    100% {
-        transform: translateX(0%);
-    }
+    text-align: center;
+    padding-top: 3px;
 }
 
 #noti-box {
@@ -651,7 +590,7 @@ body {
     background: #000;
     opacity: .465;
 
-    font-size: 1.45vh;
+    font-size: 1.1vmin;
     font-family: monospace;
     min-width: 3em;
 
@@ -733,10 +672,6 @@ input:checked + .dpad-toggle-slider:before {
     right: 5px;
     color: #dddddd;
     text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-}
-
-.source #v {
-    cursor: default;
 }
 
 .source a {

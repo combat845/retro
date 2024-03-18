@@ -12,8 +12,8 @@ import {
     AXIS_CHANGED,
     CONTROLLER_UPDATED,
     DPAD_TOGGLE,
+    FULLSCREEN_CHANGE,
     GAME_ERROR_NO_FREE_SLOTS,
-    GAME_LOADED,
     GAME_PLAYER_IDX,
     GAME_PLAYER_IDX_SET,
     GAME_ROOM_AVAILABLE,
@@ -21,10 +21,16 @@ import {
     GAMEPAD_CONNECTED,
     GAMEPAD_DISCONNECTED,
     HELP_OVERLAY_TOGGLED,
+    KB_MOUSE_FLAG,
     KEY_PRESSED,
     KEY_RELEASED,
+    KEYBOARD_KEY_DOWN,
+    KEYBOARD_KEY_UP,
     LATENCY_CHECK_REQUESTED,
     MESSAGE,
+    MOUSE_MOVED,
+    MOUSE_PRESSED,
+    POINTER_LOCK_CHANGE,
     RECORDING_STATUS_CHANGED,
     RECORDING_TOGGLED,
     SETTINGS_CHANGED,
@@ -37,6 +43,7 @@ import {
     WEBRTC_SDP_ANSWER,
     WEBRTC_SDP_OFFER,
     WORKER_LIST_FETCHED,
+    KBM_SKIP,
 } from 'event';
 import {gui} from 'gui';
 import {keyboard, KEY, joystick, retropad, touch} from 'input';
@@ -53,9 +60,13 @@ import {stats} from './stats.js?v=3';
 import {stream} from './stream.js?v=3';
 import {workerManager} from "./workerManager.js?v=3";
 
-// application state
+// application display state
 let state;
 let lastState;
+
+const state_ = {
+    showPing: false
+}
 
 // first user interaction
 let interacted = false;
@@ -102,18 +113,7 @@ const setState = (newState = app.state.eden) => {
     }
 };
 
-const onGameRoomAvailable = () => {
-    // room is ready
-};
-
-const onConnectionReady = () => {
-    // start a game right away or show the menu
-    if (room.getId()) {
-        startGame();
-    } else {
-        state.menuReady();
-    }
-};
+const onConnectionReady = () => room.id ? startGame() : state.menuReady()
 
 const onLatencyCheck = async (data) => {
     message.show('Connecting to fastest server...');
@@ -169,22 +169,20 @@ const startGame = () => {
 
     setState(app.state.game);
 
-    stream.play()
+    screen.toggle(stream)
 
     api.game.start(
         gameList.selected,
-        room.getId(),
+        room.id,
         recording.isActive(),
         recording.getUser(),
         +playerIndex.value - 1,
-    );
+    )
 
-    // clear menu screen
+    gameList.disable()
     retropad.poll.disable();
-    screen.toggle(stream);
     gui.show(keyButtons[KEY.SAVE]);
     gui.show(keyButtons[KEY.LOAD]);
-    // end clear
     retropad.poll.enable();
 };
 
@@ -204,16 +202,14 @@ const onMessage = (m) => {
             pub(WEBRTC_ICE_CANDIDATE_RECEIVED, {candidate: payload});
             break;
         case api.endpoint.GAME_START:
-            if (payload.av) {
-                pub(APP_VIDEO_CHANGED, payload.av)
-            }
+            payload.av && pub(APP_VIDEO_CHANGED, payload.av)
+            payload.kb_mouse && pub(KB_MOUSE_FLAG)
             pub(GAME_ROOM_AVAILABLE, {roomId: payload.roomId});
             break;
         case api.endpoint.GAME_SAVE:
             pub(GAME_SAVED);
             break;
         case api.endpoint.GAME_LOAD:
-            pub(GAME_LOADED);
             break;
         case api.endpoint.GAME_SET_PLAYER_INDEX:
             pub(GAME_PLAYER_IDX_SET, payload);
@@ -252,7 +248,7 @@ const onKeyPress = (data) => {
         if (KEY.HELP === data.key) helpScreen.show(true, event);
     }
 
-    state.keyPress(data.key);
+    state.keyPress(data.key, data.code)
 };
 
 // pre-state key release handler
@@ -279,7 +275,7 @@ const onKeyRelease = data => {
     // change app state if settings
     if (KEY.SETTINGS === data.key) setState(app.state.settings);
 
-    state.keyRelease(data.key);
+    state.keyRelease(data.key, data.code);
 };
 
 const updatePlayerIndex = (idx, not_game = false) => {
@@ -403,7 +399,10 @@ const app = {
             ..._default,
             name: 'game',
             axisChanged: (id, value) => retropad.setAxisChanged(id, value),
-            keyPress: key => retropad.setKeyState(key, true),
+            keyboardInput: (pressed, e) => api.game.input.keyboard.press(pressed, e),
+            mouseMove: (e) => api.game.input.mouse.move(e.dx, e.dy),
+            mousePress: (e) => api.game.input.mouse.press(e.b, e.p),
+            keyPress: (key) => retropad.setKeyState(key, true),
             keyRelease: function (key) {
                 retropad.setKeyState(key, false);
 
@@ -437,7 +436,7 @@ const app = {
                         break;
                     case KEY.QUIT:
                         retropad.poll.disable();
-                        api.game.quit(room.getId());
+                        api.game.quit(room.id)
                         room.reset();
                         window.location = window.location.pathname;
                         break;
@@ -453,10 +452,29 @@ const app = {
     }
 };
 
+// switch keyboard+mouse / retropad
+const kbmEl = document.getElementById('kbm')
+if (kbmEl) {
+    let kbmSkip = false
+    kbmEl.addEventListener('click', () => {
+        kbmSkip = !kbmSkip
+        kbmEl.classList.toggle('strikethrough', kbmSkip)
+        pub(KBM_SKIP, kbmSkip)
+    })
+    sub(KB_MOUSE_FLAG, () => gui.show(kbmEl))
+}
+
+// Browser lock API
+document.onpointerlockchange = () => pub(POINTER_LOCK_CHANGE, document.pointerLockElement)
+document.onfullscreenchange = () => pub(FULLSCREEN_CHANGE, document.fullscreenElement)
+
 // subscriptions
 sub(MESSAGE, onMessage);
 
-sub(GAME_ROOM_AVAILABLE, onGameRoomAvailable, 2);
+sub(GAME_ROOM_AVAILABLE, async () => {
+    //await screen.toggleControls(true)
+    stream.play()
+}, 2)
 sub(GAME_SAVED, () => message.show('Saved'));
 sub(GAME_PLAYER_IDX, data => {
     updatePlayerIndex(+data.index, state !== app.state.game);
@@ -485,8 +503,19 @@ sub(WEBRTC_CONNECTION_CLOSED, () => {
 sub(LATENCY_CHECK_REQUESTED, onLatencyCheck);
 sub(GAMEPAD_CONNECTED, () => message.show('Gamepad connected'));
 sub(GAMEPAD_DISCONNECTED, () => message.show('Gamepad disconnected'));
+
+// keyboard handler in the Screen Lock mode
+sub(KEYBOARD_KEY_DOWN, (v) => state.keyboardInput?.(true, v))
+sub(KEYBOARD_KEY_UP, (v) => state.keyboardInput?.(false, v))
+
+// mouse handler in the Screen Lock mode
+sub(MOUSE_MOVED, (e) => state.mouseMove?.(e))
+sub(MOUSE_PRESSED, (e) => state.mousePress?.(e))
+
+// general keyboard handler
 sub(KEY_PRESSED, onKeyPress);
 sub(KEY_RELEASED, onKeyRelease);
+
 sub(SETTINGS_CHANGED, () => message.show('Settings have been updated'));
 sub(AXIS_CHANGED, onAxisChanged);
 sub(CONTROLLER_UPDATED, data => webrtc.input(data));
@@ -496,8 +525,8 @@ sub(RECORDING_STATUS_CHANGED, handleRecordingStatus);
 sub(SETTINGS_CHANGED, () => {
     const s = settings.get();
     log.level = s[opts.LOG_LEVEL];
-    if (state.showPing !== s[opts.SHOW_PING]) {
-        state.showPing = s[opts.SHOW_PING];
+    if (state_.showPing !== s[opts.SHOW_PING]) {
+        state_.showPing = s[opts.SHOW_PING]
         stats.toggle();
     }
 });
@@ -516,16 +545,26 @@ let [roomId, zone] = room.loadMaybe();
 const wid = new URLSearchParams(document.location.search).get('wid');
 // if from URL -> start game immediately!
 socket.init(roomId, wid, zone);
-api.transport = socket;
+api.transport = {
+    send: socket.send,
+    keyboard: webrtc.keyboard,
+    mouse: webrtc.mouse,
+}
 
 // stats
 let WEBRTC_STATS_RTT;
 
 stats.modules = [
     {
-        mui: stats.mui(),
+        mui: stats.mui('', '<1'),
         init() {
             WEBRTC_STATS_RTT = (v) => (this.val = v)
+        },
+    },
+    {
+        mui: stats.mui('', '', false, () => ''),
+        init() {
+            sub(APP_VIDEO_CHANGED, (payload) => (this.val = `${payload.w}x${payload.h}`))
         },
     },
     {
@@ -548,5 +587,5 @@ stats.modules = [
         },
     }]
 
-state.showPing = settings.loadOr(opts.SHOW_PING, true);
-state.showPing && stats.toggle();
+state_.showPing = settings.loadOr(opts.SHOW_PING, true)
+state_.showPing && stats.toggle()

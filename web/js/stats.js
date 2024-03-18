@@ -110,14 +110,15 @@ const graph = (parent, opts = {
  * Get cached module UI.
  *
  * HTML:
- * <div><div>LABEL</div><span>VALUE</span>[<span><canvas/><span>]</div>
+ * `<div><div>LABEL</div><span>VALUE</span>[<span><canvas/><span>]</div>`
  *
  * @param label The name of the stat to show.
+ * @param nan A value to show when zero.
  * @param withGraph True if to draw a graph.
  * @param postfix Supposed to be the name of the stat passed as a function.
  * @returns {{el: HTMLDivElement, update: function}}
  */
-const moduleUi = (label = '', withGraph = false, postfix = () => 'ms') => {
+const moduleUi = (label = '', nan = '', withGraph = false, postfix = () => 'ms') => {
     const ui = document.createElement('div'),
         _label = document.createElement('div'),
         _value = document.createElement('span');
@@ -139,7 +140,7 @@ const moduleUi = (label = '', withGraph = false, postfix = () => 'ms') => {
     const update = (value) => {
         if (_graph) _graph.add(value);
         // 203 (333) ms
-        _value.textContent = `${value < 1 ? '<1' : value} ${_graph ? `(${_graph.max()}) ` : ''}${postfix_(value)}`;
+        _value.textContent = `${value < 1 ? nan : value}${_graph ? `(${_graph.max()}) ` : ''}${postfix_(value)}`;
     }
 
     const clear = () => {
@@ -157,7 +158,7 @@ const module = (mod) => {
         enable: () => ({}),
         ...mod,
         _disable: function () {
-            mod.val = 0;
+            // mod.val = 0;
             mod.disable && mod.disable();
             mod.mui && mod.mui.clear();
         },

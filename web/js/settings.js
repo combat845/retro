@@ -229,6 +229,14 @@ const set = (key, value, updateProvider = true) => {
     }
 }
 
+const changed = (key, obj, key2) => {
+    if (!store.settings.hasOwnProperty(key)) return
+    const newValue = store.settings[key]
+    const changed = newValue !== obj[key2]
+    changed && (obj[key2] = newValue)
+    return changed
+}
+
 const _reset = () => {
     for (let _option of Object.keys(_defaults)) {
         const value = _defaults[_option];
@@ -340,6 +348,7 @@ export const settings = {
     getStore,
     get,
     set,
+    changed,
     remove,
     import: _import,
     export: _export,
@@ -488,6 +497,8 @@ const render = function () {
             case opts.INPUT_KEYBOARD_MAP:
                 _option(data).withName('Keyboard bindings')
                     .withClass('keyboard-bindings')
+                    .withDescription(
+                        'Bindings for RetroPad. There is an alternate ESC key [Shift+`] (tilde) for cores with keyboard+mouse controls (DosBox)')
                     .add(Object.keys(value).map(k => gui.binding(value[k], k, onKeyBindingChange)))
                     .build();
                 break;
@@ -500,7 +511,6 @@ const render = function () {
             case opts.VOLUME:
                 _option(data).withName('Volume (%)')
                     .add(gui.inputN(k, onChange, value))
-                    .restartNeeded()
                     .build()
                 break;
             case opts.FORCE_FULLSCREEN:
@@ -512,8 +522,8 @@ const render = function () {
                     .build()
                 break;
             case opts.SHOW_PING:
-                _option(data).withName('Show ping')
-                    .withDescription('Always display ping info on the screen')
+                _option(data).withName('Show server stats')
+                    .withDescription('Always display server stats on the screen')
                     .add(gui.checkbox(k, onChange, value, 'Enabled', 'settings__option-checkbox'))
                     .build()
                 break;
